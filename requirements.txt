@@ -1,0 +1,11 @@
+numpy
+pandas
+scikit-learn
+PyMuPDF
+python-docx
+streamlit
+sentence-transformers
+torch
+transformers
+python-dotenv
+google-genai
