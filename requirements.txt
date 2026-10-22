@@ -8,3 +8,4 @@ sentence-transformers
 transformers
 python-dotenv
 google-genai
+reportlab
