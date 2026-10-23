@@ -1,6 +1,9 @@
+
 import streamlit as st
 from io import BytesIO
 from datetime import datetime
+from xml.sax.saxutils import escape
+
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import (
     SimpleDocTemplate,
@@ -8,25 +11,52 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
+    HRFlowable,
 )
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
-from xml.sax.saxutils import escape
 
+from common import apply_global_style, render_sidebar
+
+
+# --------------------------------------------------
+# PAGE CONFIGURATION
+# --------------------------------------------------
 st.set_page_config(
-    page_title="Download AI Report",
+    page_title="Download AI Report | IntelliHire AI",
     page_icon="📄",
     layout="wide",
 )
 
-st.title("📄 Download Your AI Resume Report")
-st.write(
-    "Generate a PDF containing your resume analysis scores, "
-    "matched skills, missing skills, and Gemini AI review."
+apply_global_style()
+render_sidebar()
+
+
+# --------------------------------------------------
+# PAGE HEADER
+# --------------------------------------------------
+st.markdown(
+    """
+    <div class="ih-hero">
+        <div class="ih-eyebrow">INTELLIHIRE AI • REPORT CENTER</div>
+        <h1>Download Your AI Resume Report</h1>
+        <p>
+            Export your resume analysis, job-matching scores,
+            matched skills, missing skills, and AI review
+            into a professional PDF report.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
-# Check analysis availability
+st.write("")
+
+
+# --------------------------------------------------
+# CHECK ANALYSIS AVAILABILITY
+# --------------------------------------------------
 required_keys = [
     "resume_text",
     "job_description",
@@ -36,20 +66,27 @@ required_keys = [
 ]
 
 if not all(
-    key in st.session_state and st.session_state[key]
+    key in st.session_state and st.session_state[key] is not None
     for key in required_keys
 ):
     st.info(
-        "Please complete Resume Analysis first. "
-        "Your results will then be available here."
+        "Your analysis results are not available yet. "
+        "Complete Resume Analysis before generating your report."
     )
 
-    if st.button("📄 Go to Resume Analysis"):
+    if st.button(
+        "📄 Go to Resume Analysis",
+        use_container_width=True,
+        type="primary",
+    ):
         st.switch_page("pages/1_Resume_Analysis.py")
 
     st.stop()
 
 
+# --------------------------------------------------
+# PDF GENERATION
+# --------------------------------------------------
 def make_pdf():
     buffer = BytesIO()
 
@@ -60,6 +97,8 @@ def make_pdf():
         leftMargin=45,
         topMargin=45,
         bottomMargin=45,
+        title="IntelliHire AI Resume Analysis Report",
+        author="IntelliHire AI",
     )
 
     styles = getSampleStyleSheet()
@@ -69,36 +108,98 @@ def make_pdf():
             name="ReportTitle",
             parent=styles["Title"],
             alignment=TA_CENTER,
+            fontSize=24,
+            leading=30,
             textColor=colors.HexColor("#2457A7"),
+            spaceAfter=8,
+        )
+    )
+
+    styles.add(
+        ParagraphStyle(
+            name="ReportSubtitle",
+            parent=styles["Normal"],
+            alignment=TA_CENTER,
+            fontSize=11,
+            leading=16,
+            textColor=colors.HexColor("#526078"),
             spaceAfter=18,
+        )
+    )
+
+    styles.add(
+        ParagraphStyle(
+            name="SectionHeading",
+            parent=styles["Heading1"],
+            fontSize=14,
+            leading=18,
+            textColor=colors.HexColor("#2457A7"),
+            spaceBefore=10,
+            spaceAfter=9,
+        )
+    )
+
+    styles.add(
+        ParagraphStyle(
+            name="ReportBody",
+            parent=styles["BodyText"],
+            fontSize=9.5,
+            leading=14,
+            spaceAfter=5,
+        )
+    )
+
+    styles.add(
+        ParagraphStyle(
+            name="SmallNote",
+            parent=styles["Italic"],
+            fontSize=8,
+            leading=11,
+            textColor=colors.HexColor("#64748B"),
         )
     )
 
     story = []
 
-    # Report heading
-    story.append(
-        Paragraph("IntelliHire AI", styles["ReportTitle"])
-    )
+    # --------------------------------------------------
+    # REPORT TITLE
+    # --------------------------------------------------
+    story.append(Spacer(1, 15))
+    story.append(Paragraph("IntelliHire AI", styles["ReportTitle"]))
     story.append(
         Paragraph(
             "Resume Analysis &amp; Job Matching Report",
-            styles["Heading2"],
+            styles["ReportSubtitle"],
         )
     )
-    story.append(Spacer(1, 8))
+
+    story.append(
+        HRFlowable(
+            width="100%",
+            thickness=1,
+            color=colors.HexColor("#D7E3F5"),
+            spaceAfter=15,
+        )
+    )
+
+    generated_time = datetime.now().strftime(
+        "%d %B %Y, %I:%M %p"
+    )
 
     story.append(
         Paragraph(
-            f"Generated: {datetime.now().strftime('%d %B %Y, %I:%M %p')}",
-            styles["Normal"],
+            f"<b>Report generated:</b> {escape(generated_time)}",
+            styles["ReportBody"],
         )
     )
-    story.append(Spacer(1, 18))
 
-    # Score summary
+    story.append(Spacer(1, 12))
+
+    # --------------------------------------------------
+    # ANALYSIS SCORES
+    # --------------------------------------------------
     story.append(
-        Paragraph("1. Analysis Scores", styles["Heading1"])
+        Paragraph("1. Analysis Scores", styles["SectionHeading"])
     )
 
     scores_data = [
@@ -119,129 +220,215 @@ def make_pdf():
 
     score_table = Table(
         scores_data,
-        colWidths=[280, 150],
+        colWidths=[330, 120],
         repeatRows=1,
+        hAlign="LEFT",
     )
 
     score_table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2457A7")),
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor("#2457A7"),
+                ),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("PADDING", (0, 0), (-1, -1), 8),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D8E0EA")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [
+                    colors.white,
+                    colors.HexColor("#F3F7FC"),
+                ]),
+                ("PADDING", (0, 0), (-1, -1), 9),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ]
         )
     )
 
     story.append(score_table)
-    story.append(Spacer(1, 18))
+    story.append(Spacer(1, 15))
 
-    # Matched and missing skills
+    # --------------------------------------------------
+    # MATCHED SKILLS
+    # --------------------------------------------------
     matched = st.session_state.get("matched_skills", [])
-    missing = st.session_state.get("missing_skills", [])
 
     story.append(
-        Paragraph("2. Matched Skills", styles["Heading1"])
+        Paragraph("2. Matched Skills", styles["SectionHeading"])
     )
 
     if matched:
+        matched_text = escape(", ".join(map(str, matched)))
         story.append(
-            Paragraph(
-                escape(", ".join(map(str, matched))),
-                styles["BodyText"],
-            )
+            Paragraph(matched_text, styles["ReportBody"])
         )
     else:
         story.append(
-            Paragraph("No matched skills recorded.", styles["BodyText"])
+            Paragraph(
+                "No matched skills were recorded.",
+                styles["ReportBody"],
+            )
         )
 
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 8))
+
+    # --------------------------------------------------
+    # MISSING SKILLS
+    # --------------------------------------------------
+    missing = st.session_state.get("missing_skills", [])
 
     story.append(
-        Paragraph("3. Missing Skills", styles["Heading1"])
+        Paragraph("3. Missing Skills", styles["SectionHeading"])
     )
 
     if missing:
+        missing_text = escape(", ".join(map(str, missing)))
         story.append(
-            Paragraph(
-                escape(", ".join(map(str, missing))),
-                styles["BodyText"],
-            )
+            Paragraph(missing_text, styles["ReportBody"])
         )
     else:
         story.append(
-            Paragraph("No missing skills recorded.", styles["BodyText"])
+            Paragraph(
+                "No missing skills were recorded.",
+                styles["ReportBody"],
+            )
         )
 
-    story.append(Spacer(1, 18))
+    story.append(Spacer(1, 8))
 
-    # Gemini AI review
+    # --------------------------------------------------
+    # GEMINI AI REVIEW
+    # --------------------------------------------------
     story.append(
-        Paragraph("4. Gemini AI Resume Review", styles["Heading1"])
+        Paragraph(
+            "4. Gemini AI Resume Review",
+            styles["SectionHeading"],
+        )
     )
 
     review = st.session_state.get("ai_review", "")
 
     if review:
-        for line in review.splitlines():
+        for line in str(review).splitlines():
             clean_line = line.strip()
 
             if not clean_line:
-                story.append(Spacer(1, 5))
+                story.append(Spacer(1, 4))
                 continue
 
-            # Remove basic Markdown markers for a readable PDF.
+            # Basic Markdown cleanup for PDF readability.
             clean_line = clean_line.replace("**", "")
             clean_line = clean_line.replace("### ", "")
             clean_line = clean_line.replace("## ", "")
             clean_line = clean_line.replace("# ", "")
-            clean_line = clean_line.replace("- ", "• ")
+
+            if clean_line.startswith("- ") or clean_line.startswith("* "):
+                clean_line = "• " + clean_line[2:]
 
             story.append(
                 Paragraph(
                     escape(clean_line),
-                    styles["BodyText"],
+                    styles["ReportBody"],
                 )
             )
-            story.append(Spacer(1, 5))
     else:
         story.append(
             Paragraph(
-                "No AI review is available. Complete Resume Analysis first.",
-                styles["BodyText"],
+                "No AI review is available. "
+                "Complete the AI review step to include feedback in this report.",
+                styles["ReportBody"],
             )
         )
 
     story.append(Spacer(1, 18))
 
-    # Disclaimer
+    # --------------------------------------------------
+    # DISCLAIMER
+    # --------------------------------------------------
     story.append(
-        Paragraph(
-            "Note: Similarity scores are algorithmic estimates and do not "
-            "guarantee job selection. Review all recommendations before "
-            "updating your resume.",
-            styles["Italic"],
+        HRFlowable(
+            width="100%",
+            thickness=0.5,
+            color=colors.HexColor("#D8E0EA"),
+            spaceBefore=5,
+            spaceAfter=10,
         )
     )
 
-    doc.build(story)
-    buffer.seek(0)
+    story.append(
+        Paragraph(
+            "<b>Disclaimer:</b> Similarity scores are algorithmic estimates "
+            "and do not guarantee job selection. Review all recommendations "
+            "carefully before updating your resume.",
+            styles["SmallNote"],
+        )
+    )
 
+    # Add a page number to every page.
+    def add_page_number(canvas, document):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#64748B"))
+        canvas.drawRightString(
+            A4[0] - 45,
+            22,
+            f"IntelliHire AI | Page {document.page}",
+        )
+        canvas.restoreState()
+
+    doc.build(
+        story,
+        onFirstPage=add_page_number,
+        onLaterPages=add_page_number,
+    )
+
+    buffer.seek(0)
     return buffer.getvalue()
 
 
+# --------------------------------------------------
+# REPORT PREVIEW AND DOWNLOAD
+# --------------------------------------------------
+st.markdown("### 📊 Report Summary")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric(
+        "Skill Match",
+        f"{float(st.session_state.skill_match_percentage):.2f}%",
+    )
+
+with col2:
+    st.metric(
+        "TF-IDF / ML Similarity",
+        f"{float(st.session_state.similarity_score):.2f}%",
+    )
+
+with col3:
+    st.metric(
+        "Semantic Similarity",
+        f"{float(st.session_state.semantic_score):.2f}%",
+    )
+
+st.write("")
+
 try:
-    st.success("Your analysis results are ready to export.")
+    pdf_data = make_pdf()
+
+    st.success("Your PDF report is ready to download.")
 
     st.download_button(
         label="⬇️ Download Resume Analysis Report (PDF)",
-        data=make_pdf(),
+        data=pdf_data,
         file_name="IntelliHire_AI_Resume_Report.pdf",
         mime="application/pdf",
         use_container_width=True,
+        type="primary",
     )
 
 except Exception as error:
